@@ -162,7 +162,6 @@
     shaderProgram.directionalColorUniform = gl.getUniformLocation(shaderProgram, "uDirectionalColor");
   }
 
-
   function handleLoadedTexture(texture) {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -174,19 +173,25 @@
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
-
-  var sphereTexture;
+  var earthTexture;
+  var moonTexture;
 
   function initTexture() {
-    sphereTexture = gl.createTexture();
-    sphereTexture.image = new Image();
-    sphereTexture.image.onload = function () {
-      handleLoadedTexture(sphereTexture)
+    earthTexture = gl.createTexture();
+    earthTexture.image = new Image();
+    earthTexture.image.onload = function () {
+      handleLoadedTexture(earthTexture)
     }
+    earthTexture.image.src = "image/earth.gif";
 
-    sphereTexture.image.src = "image/moon.gif";
+    moonTexture = gl.createTexture();
+    moonTexture.image = new Image();
+    moonTexture.image.onload = function () {
+      handleLoadedTexture(moonTexture)
+    }
+    moonTexture.image.src = "image/moon.gif";
+    
   }
-
 
   var mvMatrix = mat4.create();
   var mvMatrixStack = [];
@@ -224,8 +229,8 @@
   var lastMouseX = null;
   var lastMouseY = null;
 
-  var moonRotationMatrix = mat4.create();
-  mat4.identity(moonRotationMatrix);
+  var earthRotationMatrix = mat4.create();
+  mat4.identity(earthRotationMatrix);
 
   function handleMouseDown(event) {
     mouseDown = true;
@@ -252,12 +257,17 @@
     var deltaY = newY - lastMouseY;
     mat4.rotate(newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]);
 
-    mat4.multiply(newRotationMatrix, moonRotationMatrix, moonRotationMatrix);
+    mat4.multiply(newRotationMatrix, earthRotationMatrix, earthRotationMatrix);
 
     lastMouseX = newX
     lastMouseY = newY;
   }
 
+  var earthVertexPositionBuffer;
+  var earthVertexNormalBuffer;
+  var earthVertexTextureCoordBuffer;
+  var earthVertexIndexBuffer;
+  
   var moonVertexPositionBuffer;
   var moonVertexNormalBuffer;
   var moonVertexTextureCoordBuffer;
@@ -266,11 +276,19 @@
   function initBuffers() {
     var latitudeBands = 30;
     var longitudeBands = 30;
-    var radius = 2;
+    var moonRadius = 1;
+    var earthRadius = 2;
 
-    var vertexPositionData = [];
-    var normalData = [];
-    var textureCoordData = [];
+    /* Earth Vertices, Normal and Texture Coordinate Data */
+    var earthVertexPositionData = [];
+    var earthNormalData = [];
+    var earthTextureCoordData = [];
+
+    /* Moon Vertices, Normal and Texture Coordinate Data */
+    var moonVertexPositionData = [];
+    var moonNormalData = [];
+    var moonTextureCoordData = [];
+    
     for (var latNumber=0; latNumber <= latitudeBands; latNumber++) {
       var theta = latNumber * Math.PI / latitudeBands;
       var sinTheta = Math.sin(theta);
@@ -287,14 +305,25 @@
         var u = 1 - (longNumber / longitudeBands);
         var v = 1 - (latNumber / latitudeBands);
 
-        normalData.push(x);
-        normalData.push(y);
-        normalData.push(z);
-        textureCoordData.push(u);
-        textureCoordData.push(v);
-        vertexPositionData.push(radius * x);
-        vertexPositionData.push(radius * y);
-        vertexPositionData.push(radius * z);
+        /* Use calculations to create Earth */
+        earthNormalData.push(x);
+        earthNormalData.push(y);
+        earthNormalData.push(z);
+        earthTextureCoordData.push(u);
+        earthTextureCoordData.push(v);
+        earthVertexPositionData.push(earthRadius * x);
+        earthVertexPositionData.push(earthRadius * y);
+        earthVertexPositionData.push(earthRadius * z);
+        
+        /* Use calculations to create Moon */
+        moonNormalData.push(x);
+        moonNormalData.push(y);
+        moonNormalData.push(z);
+        moonTextureCoordData.push(u);
+        moonTextureCoordData.push(v);
+        moonVertexPositionData.push(3 + moonRadius * x);
+        moonVertexPositionData.push(moonRadius * y);
+        moonVertexPositionData.push(moonRadius * z);
       }
     }
 
@@ -313,23 +342,49 @@
       }
     }
 
+    /* Create Earth Buffers */
+    earthVertexNormalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexNormalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(earthNormalData), gl.STATIC_DRAW);
+    earthVertexNormalBuffer.itemSize = 3;
+    earthVertexNormalBuffer.numItems = earthNormalData.length / 3;
+
+    earthVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexTextureCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(earthTextureCoordData), gl.STATIC_DRAW);
+    earthVertexTextureCoordBuffer.itemSize = 2;
+    earthVertexTextureCoordBuffer.numItems = earthTextureCoordData.length / 2;
+
+    earthVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexPositionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(earthVertexPositionData), gl.STATIC_DRAW);
+    earthVertexPositionBuffer.itemSize = 3;
+    earthVertexPositionBuffer.numItems = earthVertexPositionData.length / 3;
+
+    earthVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, earthVertexIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indexData), gl.STATIC_DRAW);
+    earthVertexIndexBuffer.itemSize = 1;
+    earthVertexIndexBuffer.numItems = indexData.length;
+    
+    /* Create Moon Buffers */
     moonVertexNormalBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexNormalBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normalData), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(moonNormalData), gl.STATIC_DRAW);
     moonVertexNormalBuffer.itemSize = 3;
-    moonVertexNormalBuffer.numItems = normalData.length / 3;
+    moonVertexNormalBuffer.numItems = moonNormalData.length / 3;
 
     moonVertexTextureCoordBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexTextureCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordData), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(moonTextureCoordData), gl.STATIC_DRAW);
     moonVertexTextureCoordBuffer.itemSize = 2;
-    moonVertexTextureCoordBuffer.numItems = textureCoordData.length / 2;
+    moonVertexTextureCoordBuffer.numItems = moonTextureCoordData.length / 2;
 
     moonVertexPositionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexPositionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositionData), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(moonVertexPositionData), gl.STATIC_DRAW);
     moonVertexPositionBuffer.itemSize = 3;
-    moonVertexPositionBuffer.numItems = vertexPositionData.length / 3;
+    moonVertexPositionBuffer.numItems = moonVertexPositionData.length / 3;
 
     moonVertexIndexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
@@ -338,6 +393,10 @@
     moonVertexIndexBuffer.numItems = indexData.length;
   }
 
+  var distanceToEarth = 6;
+  var deltaDistanceToEarth = 0.1;
+  var minDistanceToEarth = 4;
+  var maxDistanceToEarth = 12;
   var rotation = 0;
   var lastTime = 0;
 
@@ -379,17 +438,44 @@
       );
     }
 
+    // Reset the position.
     mat4.identity(mvMatrix);
 
-    mat4.translate(mvMatrix, [0, 0, -6]);
+    // Translation and a rotation for drawing earth.
+    mat4.translate(mvMatrix, [0, 0, -10]);
+    //mat4.translate(mvMatrix, [0, 0, -distanceToEarth]);
     mat4.rotate(mvMatrix, degToRad(rotation), [0, 1, 0]);
 
-    mat4.multiply(mvMatrix, moonRotationMatrix);
+    mat4.multiply(mvMatrix, earthRotationMatrix);
 
+    // Set the texture we are using.
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sphereTexture);
+    gl.bindTexture(gl.TEXTURE_2D, earthTexture);
     gl.uniform1i(shaderProgram.samplerUniform, 0);
 
+    // Draw the Earth
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexPositionBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, earthVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, earthVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, earthVertexNormalBuffer);
+    gl.vertexAttribPointer(shaderProgram.vertexNormalAttribute, earthVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, earthVertexIndexBuffer);
+    setMatrixUniforms();
+    gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    
+    /* Cheeky translation to the moon */
+    mat4.translate(mvMatrix, [2, 0, 0]);
+    
+    // Set the texture we are using.
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, moonTexture);
+    gl.uniform1i(shaderProgram.samplerUniform, 0);
+    
+    // Draw the Moon
     gl.bindBuffer(gl.ARRAY_BUFFER, moonVertexPositionBuffer);
     gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, moonVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
@@ -401,7 +487,8 @@
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
     setMatrixUniforms();
-    gl.drawElements(gl.TRIANGLES, moonVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
   }
 
 
@@ -417,6 +504,10 @@
     if (lastTime != 0) {
       var elapsed = timeNow - lastTime;
       rotation += (22.5 * elapsed) / 1000.0;
+      distanceToEarth += deltaDistanceToEarth;
+      if (distanceToEarth < minDistanceToEarth || distanceToEarth > maxDistanceToEarth) {
+        deltaDistanceToEarth = -deltaDistanceToEarth;
+      }
     }
     lastTime = timeNow;
   }
