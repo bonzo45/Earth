@@ -321,7 +321,7 @@
         moonNormalData.push(z);
         moonTextureCoordData.push(u);
         moonTextureCoordData.push(v);
-        moonVertexPositionData.push(3 + moonRadius * x);
+        moonVertexPositionData.push(moonRadius * x);
         moonVertexPositionData.push(moonRadius * y);
         moonVertexPositionData.push(moonRadius * z);
       }
@@ -393,12 +393,13 @@
     moonVertexIndexBuffer.numItems = indexData.length;
   }
 
-  var distanceToEarth = 6;
-  var deltaDistanceToEarth = 0.1;
-  var minDistanceToEarth = 4;
-  var maxDistanceToEarth = 12;
   var rotation = 0;
   var lastTime = 0;
+
+  moonX = 4;
+  moonY = 0;
+  moonZ = 0;
+  moonAngle = 0.0;
 
   function drawScene() {
     // Bodge to fix the fullscreen problem.
@@ -408,7 +409,8 @@
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-    
+   
+    // Lighting Wizardry
     var lighting = document.getElementById("lighting").checked;
     gl.uniform1i(shaderProgram.useLightingUniform, lighting);
     if (lighting) {
@@ -440,15 +442,17 @@
 
     // Reset the position.
     mat4.identity(mvMatrix);
-
-    // Translation and a rotation for drawing earth.
+    // Go to Earth
     mat4.translate(mvMatrix, [0, 0, -10]);
-    //mat4.translate(mvMatrix, [0, 0, -distanceToEarth]);
-    mat4.rotate(mvMatrix, degToRad(rotation), [0, 1, 0]);
+   
+    // Save Earth
+    mvPushMatrix();
 
+    // Rotate Earth
+    mat4.rotate(mvMatrix, degToRad(rotation), [0, 1, 0]);
     mat4.multiply(mvMatrix, earthRotationMatrix);
 
-    // Set the texture we are using.
+    // Set the earth texture.
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, earthTexture);
     gl.uniform1i(shaderProgram.samplerUniform, 0);
@@ -467,10 +471,14 @@
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
     
-    /* Cheeky translation to the moon */
-    mat4.translate(mvMatrix, [2, 0, 0]);
+    mvPopMatrix();
     
-    // Set the texture we are using.
+    // Go to the Moon
+    mat4.translate(mvMatrix, [moonX, moonY, moonZ]);
+    // Rotate the Moon
+    mat4.rotate(mvMatrix, degToRad(-rotation), [0, 1, 0]);
+    
+    // Set the moon texture.
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, moonTexture);
     gl.uniform1i(shaderProgram.samplerUniform, 0);
@@ -499,15 +507,24 @@
   }
 
   function animate() {
-    rotation += 1        
+    rotation += 1;       
     var timeNow = new Date().getTime();
     if (lastTime != 0) {
+      // Rotation of Earth and Moon
       var elapsed = timeNow - lastTime;
       rotation += (22.5 * elapsed) / 1000.0;
-      distanceToEarth += deltaDistanceToEarth;
-      if (distanceToEarth < minDistanceToEarth || distanceToEarth > maxDistanceToEarth) {
-        deltaDistanceToEarth = -deltaDistanceToEarth;
-      }
+
+      // Rotation of Earth around Moon
+      // Approximating the distance travelled to a straight line, not curved.
+      var speedOfMoon = 2;
+      var distanceToMoon = 4;
+      var distanceTravelled = elapsed * speedOfMoon / 1000;
+      var angleDelta = Math.asin(distanceTravelled/distanceToMoon);
+      moonAngle += angleDelta;
+      moonAngle = moonAngle % (2 * Math.PI);
+      moonX = distanceToMoon * Math.cos(moonAngle);
+      moonY = moonY; 
+      moonZ = distanceToMoon * Math.sin(moonAngle);
     }
     lastTime = timeNow;
   }
