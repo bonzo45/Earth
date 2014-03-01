@@ -35,25 +35,25 @@
 
     uniform vec3 uAmbientColor;
 
-    uniform vec3 uLightingDirection;
+    uniform vec3 uLightingPosition;
     uniform vec3 uDirectionalColor;
-
-    uniform bool uUseLighting;
 
     varying vec2 vTextureCoord;
     varying vec3 vLightWeighting;
 
     void main(void) {
+      // Move the vertex and project to get screen position.
       gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+      // Pass texture coordinate through to geometry shader.
       vTextureCoord = aTextureCoord;
-
-      if (!uUseLighting) {
-        vLightWeighting = vec3(1.0, 1.0, 1.0);
-      } else {
-        vec3 transformedNormal = uNMatrix * aVertexNormal;
-        float directionalLightWeighting = max(dot(transformedNormal, uLightingDirection), 0.0);
-        vLightWeighting = uAmbientColor + uDirectionalColor * directionalLightWeighting;
-      }
+      
+      // Compute direction to light source
+      vec3 lightingDirection = uLightingPosition - aVertexPosition;
+      normalize(lightingDirection);
+      
+      vec3 transformedNormal = uNMatrix * aVertexNormal;
+      float directionalLightWeighting = max(dot(transformedNormal, lightingDirection), 0.0);
+      vLightWeighting = uAmbientColor + uDirectionalColor * directionalLightWeighting;
     }
   </script>
 
@@ -158,7 +158,7 @@
     shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
     shaderProgram.useLightingUniform = gl.getUniformLocation(shaderProgram, "uUseLighting");
     shaderProgram.ambientColorUniform = gl.getUniformLocation(shaderProgram, "uAmbientColor");
-    shaderProgram.lightingDirectionUniform = gl.getUniformLocation(shaderProgram, "uLightingDirection");
+    shaderProgram.lightingPositionUniform = gl.getUniformLocation(shaderProgram, "uLightingPosition");
     shaderProgram.directionalColorUniform = gl.getUniformLocation(shaderProgram, "uDirectionalColor");
   }
 
@@ -231,7 +231,9 @@
 
   var earthRotationMatrix = mat4.create();
   mat4.identity(earthRotationMatrix);
-
+  
+  var zTranslation = 0;
+  
   function handleMouseDown(event) {
     mouseDown = true;
     lastMouseX = event.clientX;
@@ -249,15 +251,9 @@
     var newX = event.clientX;
     var newY = event.clientY;
 
-    var deltaX = newX - lastMouseX
-    var newRotationMatrix = mat4.create();
-    mat4.identity(newRotationMatrix);
-    mat4.rotate(newRotationMatrix, degToRad(deltaX / 10), [0, 1, 0]);
-
-    var deltaY = newY - lastMouseY;
-    mat4.rotate(newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]);
-
-    mat4.multiply(newRotationMatrix, earthRotationMatrix, earthRotationMatrix);
+    var deltaX = newX - lastMouseX;
+    
+    zTranslation += 10 * deltaX / gl.viewportWidth;
 
     lastMouseX = newX
     lastMouseY = newY;
@@ -410,47 +406,55 @@
 
     mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
    
-    // Lighting Wizardry
-    var lighting = document.getElementById("lighting").checked;
-    gl.uniform1i(shaderProgram.useLightingUniform, lighting);
-    if (lighting) {
-      gl.uniform3f(
-        shaderProgram.ambientColorUniform,
-        0.2,
-        0.2,
-        0.2
-      );
+    /* SHADERS -- LIGHTING -- SHADERS */
+    // Ambient Colour
+    gl.uniform3f(
+      shaderProgram.ambientColorUniform,
+      0.2,
+      0.2,
+      0.2
+    );
 
-      var lightingDirection = [
-        -1,
-        -1,
-        -1
-      ];
+    // Direction of Light
+    var lightingPosition = [
+      moonX,
+      moonY,
+      moonZ
+    ];
+    gl.uniform3fv(
+      shaderProgram.lightingPositionUniform,
+      lightingPosition
+    );
 
-      var adjustedLD = vec3.create();
-      vec3.normalize(lightingDirection, adjustedLD);
-      vec3.scale(adjustedLD, -1);
-      gl.uniform3fv(shaderProgram.lightingDirectionUniform, adjustedLD);
-
-      gl.uniform3f(
-        shaderProgram.directionalColorUniform,
-        0.8,
-        0.8,
-        0.8
-      );
-    }
+    // Directional Colour
+    gl.uniform3f(
+      shaderProgram.directionalColorUniform,
+      0.8,
+      0.8,
+      0.8
+    );
 
     // Reset the position.
     mat4.identity(mvMatrix);
+    
+    // Move Model further away
+    mat4.translate(mvMatrix, [0, 0, zTranslation]);
+    
     // Go to Earth
     mat4.translate(mvMatrix, [0, 0, -10]);
-   
+    drawEarth();
+    
+    // Go to the Moon
+    mat4.translate(mvMatrix, [moonX, moonY, moonZ]);
+    drawMoon();
+  }
+  
+  function drawEarth() {
     // Save Earth
     mvPushMatrix();
 
     // Rotate Earth
-    mat4.rotate(mvMatrix, degToRad(rotation), [0, 1, 0]);
-    mat4.multiply(mvMatrix, earthRotationMatrix);
+    // mat4.rotate(mvMatrix, degToRad(rotation), [0, 1, 0]);
 
     // Set the earth texture.
     gl.activeTexture(gl.TEXTURE0);
@@ -471,12 +475,13 @@
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
     
+    // Restore Earth
     mvPopMatrix();
-    
-    // Go to the Moon
-    mat4.translate(mvMatrix, [moonX, moonY, moonZ]);
+  }
+  
+  function drawMoon() {
     // Rotate the Moon
-    mat4.rotate(mvMatrix, degToRad(-rotation), [0, 1, 0]);
+    // mat4.rotate(mvMatrix, degToRad(-rotation), [0, 1, 0]);
     
     // Set the moon texture.
     gl.activeTexture(gl.TEXTURE0);
@@ -496,9 +501,7 @@
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
-
   }
-
 
   function tick() {
     requestAnimFrame(tick);
@@ -552,15 +555,7 @@
 <!-- HTML -->
 
 <body onload="webGLStart();">
-  <div id="combined">
-    <div id="left">
-      <input type="checkbox" id="lighting" checked />Lighting
-    </div>
-    
-    <div id="right">
-      <canvas id="canvas"></canvas>
-    </div>
-  </div>
+    <canvas id="canvas"></canvas>
 </body>
 
 </html>
