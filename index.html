@@ -42,14 +42,15 @@
     varying vec3 vLightWeighting;
 
     void main(void) {
-      // Move the vertex and project to get screen position.
-      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
       // Pass texture coordinate through to geometry shader.
       vTextureCoord = aTextureCoord;
       
-      // Compute direction to light source
-      vec3 lightingDirection = uLightingPosition - aVertexPosition;
-      normalize(lightingDirection);
+      // This is like the world position of the vertex.
+      vec4 mvPosition = uMVMatrix * vec4(aVertexPosition, 1.0);
+      // This is the screen position of the vertex.
+      gl_Position = uPMatrix * mvPosition;
+     
+      vec3 lightingDirection = normalize(uLightingPosition - mvPosition.xyz);
       
       vec3 transformedNormal = uNMatrix * aVertexNormal;
       float directionalLightWeighting = max(dot(transformedNormal, lightingDirection), 0.0);
@@ -225,7 +226,10 @@
     return degrees * Math.PI / 180;
   }
 
-  var mouseDown = false;
+  var mouseDown = 0;
+  const LEFT_CLICK_MASK = 1;
+  const MIDDLE_CLICK_MASK = 2;
+  const RIGHT_CLICK_MASK = 4;
   var lastMouseX = null;
   var lastMouseY = null;
 
@@ -233,27 +237,60 @@
   mat4.identity(earthRotationMatrix);
   
   var zTranslation = 0;
+  var zRotation = 0;
   
   function handleMouseDown(event) {
-    mouseDown = true;
+    switch (event.button) {
+      // LEFT CLICK
+      case 0:
+        mouseDown = mouseDown | LEFT_CLICK_MASK;
+        break;
+      // MIDDLE CLICK
+      case 1:
+        mouseDown = mouseDown | MIDDLE_CLICK_MASK;
+        break;
+      // RIGHT CLICK
+      case 2:
+        mouseDown = mouseDown | RIGHT_CLICK_MASK;
+        break;
+    }
+    
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
   }
 
   function handleMouseUp(event) {
-    mouseDown = false;
+    switch (event.button) {
+      // LEFT CLICK
+      case 0:
+        mouseDown = mouseDown &! LEFT_CLICK_MASK;
+        break;
+      // MIDDLE CLICK
+      case 1:
+        mouseDown = mouseDown &! MIDDLE_CLICK_MASK;
+        break;
+      // RIGHT CLICK
+      case 2:
+        mouseDown = mouseDown &! RIGHT_CLICK_MASK;
+        break;
+    }
   }
 
   function handleMouseMove(event) {
-    if (!mouseDown) {
-      return;
-    }
+
+      
     var newX = event.clientX;
     var newY = event.clientY;
-
-    var deltaX = newX - lastMouseX;
     
-    zTranslation += 10 * deltaX / gl.viewportWidth;
+    if ((mouseDown & LEFT_CLICK_MASK) != 0) {
+      var deltaX = newX - lastMouseX;
+      zTranslation += 10 * deltaX / gl.viewportWidth;
+    }
+    
+    if ((mouseDown & MIDDLE_CLICK_MASK) != 0) {
+      var deltaY = newY - lastMouseY;
+      zRotation += 2 * Math.PI * deltaY / gl.viewportHeight;
+    }
 
     lastMouseX = newX
     lastMouseY = newY;
@@ -419,7 +456,7 @@
     var lightingPosition = [
       moonX,
       moonY,
-      moonZ
+      moonZ + zTranslation
     ];
     gl.uniform3fv(
       shaderProgram.lightingPositionUniform,
@@ -436,16 +473,17 @@
 
     // Reset the position.
     mat4.identity(mvMatrix);
-    
+        
     // Move Model further away
     mat4.translate(mvMatrix, [0, 0, zTranslation]);
     
+    // Rotate Model
+    //mat4.rotate(mvMatrix, zRotation, [0, 0, 1]);
+    
     // Go to Earth
-    mat4.translate(mvMatrix, [0, 0, -10]);
     drawEarth();
     
     // Go to the Moon
-    mat4.translate(mvMatrix, [moonX, moonY, moonZ]);
     drawMoon();
   }
   
@@ -480,6 +518,9 @@
   }
   
   function drawMoon() {
+    mvPushMatrix();
+    
+    mat4.translate(mvMatrix, [moonX, moonY, moonZ]);
     // Rotate the Moon
     // mat4.rotate(mvMatrix, degToRad(-rotation), [0, 1, 0]);
     
@@ -501,6 +542,8 @@
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moonVertexIndexBuffer);
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, earthVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    
+    mvPopMatrix();
   }
 
   function tick() {
