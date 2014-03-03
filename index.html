@@ -183,14 +183,14 @@
     earthTexture.image.onload = function () {
       handleLoadedTexture(earthTexture)
     }
-    earthTexture.image.src = "image/earth.gif";
+    earthTexture.image.src = "images/earth.gif";
 
     moonTexture = gl.createTexture();
     moonTexture.image = new Image();
     moonTexture.image.onload = function () {
       handleLoadedTexture(moonTexture)
     }
-    moonTexture.image.src = "image/moon.gif";
+    moonTexture.image.src = "images/moon.gif";
     
   }
 
@@ -237,6 +237,7 @@
   mat4.identity(earthRotationMatrix);
   
   var zTranslation = 0;
+  var yRotation = 0;
   var zRotation = 0;
   
   function handleMouseDown(event) {
@@ -276,19 +277,19 @@
     }
   }
 
-  function handleMouseMove(event) {
-
-      
+  function handleMouseMove(event) {      
     var newX = event.clientX;
     var newY = event.clientY;
     
+    var deltaX = newX - lastMouseX;
+    var deltaY = newY - lastMouseY;
+    
     if ((mouseDown & LEFT_CLICK_MASK) != 0) {
-      var deltaX = newX - lastMouseX;
       zTranslation += 10 * deltaX / gl.viewportWidth;
     }
     
-    if ((mouseDown & MIDDLE_CLICK_MASK) != 0) {
-      var deltaY = newY - lastMouseY;
+    if ((mouseDown & RIGHT_CLICK_MASK) != 0) {
+      yRotation += 2 * Math.PI * deltaX / gl.viewportWidth;
       zRotation += 2 * Math.PI * deltaY / gl.viewportHeight;
     }
 
@@ -434,6 +435,8 @@
   moonZ = 0;
   moonAngle = 0.0;
 
+  var yAngle = 0;
+  
   function drawScene() {
     // Bodge to fix the fullscreen problem.
     updateCanvasSize(document.getElementById("canvas"));
@@ -477,8 +480,15 @@
     // Move Model further away
     mat4.translate(mvMatrix, [0, 0, zTranslation]);
     
+    yAngle = (22.5 * elapsed) / 1000.0; //yRotation * (elapsed / 1000);
+    
     // Rotate Model
+<<<<<<< HEAD
     //mat4.rotate(mvMatrix, zRotation, [0, 0, 1]);
+=======
+    mat4.rotate(mvMatrix, yAngle, [0, 1, 0]);
+    mat4.rotate(mvMatrix, zRotation, [0, 0, 1]);
+>>>>>>> Not sure what's going on...
     
     // Go to Earth
     drawEarth();
@@ -548,16 +558,18 @@
 
   function tick() {
     requestAnimFrame(tick);
-    drawScene();
     animate();
+    drawScene();
   }
 
+  var elapsed;
+  
   function animate() {
     rotation += 1;       
     var timeNow = new Date().getTime();
     if (lastTime != 0) {
       // Rotation of Earth and Moon
-      var elapsed = timeNow - lastTime;
+      elapsed = timeNow - lastTime;
       rotation += (22.5 * elapsed) / 1000.0;
 
       // Rotation of Earth around Moon
@@ -598,7 +610,7 @@
 <!-- HTML -->
 
 <body onload="webGLStart();">
-    <canvas id="canvas"></canvas>
+    <canvas oncontextmenu="return false" id="canvas"></canvas>
 </body>
 
 </html>
